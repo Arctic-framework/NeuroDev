@@ -1,0 +1,322 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
+import random
+from mpl_toolkits.mplot3d import Axes3D
+
+#NeuroDev V1.0 Created by Arctic-framework 2023
+#Discord - alerthi_there
+#Linkdln - JamesHaliday
+
+
+plt.style.use('dark_background')
+cmap = plt.get_cmap('coolwarm')
+
+
+class Neuron:
+    def __init__(self, name, membrane_resistance, membrane_capacity, resting_potential):
+        self.name = name
+        self.membrane_resistance = membrane_resistance
+        self.membrane_capacity = membrane_capacity
+        self.resting_potential = resting_potential
+        self.membrane_potential = resting_potential
+        self.is_activated = False
+        self.synapses = []
+        self.learning_effect = 0.1  # Adjusted learning effect
+        self.spike_threshold = 7.5  # Adjusted threshold for spiking
+        self.adaptive_threshold = self.spike_threshold  # Initial threshold
+        self.neuromodulation = {}  # Neuromodulation parameters
+
+    def stimulate(self, input_current, neurotransmitters={}, neuromodulators={}):
+        membrane_time_constant = self.membrane_resistance * self.membrane_capacity
+        delta_potential = (input_current - (self.membrane_potential - self.resting_potential)) / membrane_time_constant
+        self.membrane_potential += delta_potential
+
+        # Apply neurotransmission effects
+        for neurotransmitter, strength in neurotransmitters.items():
+            if neurotransmitter in self.synapses:
+                self.membrane_potential += strength
+
+        # Apply neuromodulation
+        for neuromodulator, strength in neuromodulators.items():
+            if neuromodulator in self.neuromodulation:
+                self.membrane_potential += strength * self.neuromodulation[neuromodulator]
+
+        if self.membrane_potential >= self.adaptive_threshold:
+            self.is_activated = True
+            self.membrane_potential = self.resting_potential  # Reset membrane potential
+            return True
+        else:
+            self.is_activated = False
+            return False
+
+    def add_synapse(self, synapse):
+        self.synapses.append(synapse)
+
+    def adapt_threshold(self, delta_threshold):
+        # Update the adaptive threshold based on recent activity
+        self.adaptive_threshold += delta_threshold
+class Synapse:
+    def __init__(self, source, target, weight=0.5, feedback=False):
+        self.source = source
+        self.target = target
+        self.weight = weight
+        self.feedback = feedback
+        self.last_spike_time = None
+        self.activation_history = []  # Added to track activation history
+
+    def apply_plasticity_rule(self):
+        # Implement Long-Term Potentiation (LTP) and Long-Term Depression (LTD)
+        if self.source.is_activated and self.target.is_activated:
+            if self.last_spike_time is not None:
+                spike_timing = self.target.learning_effect - self.last_spike_time
+                # Adjust weights based on spike timing
+                if spike_timing > 0:
+                    self.weight += spike_timing * 0.1  # LTP
+                else:
+                    self.weight += spike_timing * 0.05  # LTD
+
+                self.activation_history.append(1)  # Track activations for homeostasis
+            self.last_spike_time = self.target.learning_effect
+
+
+class Neuromodulator:
+    def __init__(self, name, target_neurons, modulation_strength=1.0):
+        self.name = name
+        self.target_neurons = target_neurons
+        self.modulation_strength = modulation_strength
+
+    def modulate_neurons(self):
+        for neuron in self.target_neurons:
+            neuron.neuromodulation[self.name] = self.modulation_strength
+
+
+class NeuralNetwork:
+    def __init__(self, name, membrane_resistance, membrane_capacity, resting_potential):
+        self.name = name
+        self.membrane_resistance = membrane_resistance
+        self.membrane_capacity = membrane_capacity
+        self.resting_potential = resting_potential
+        self.membrane_potential = resting_potential
+        self.is_activated = False
+        self.synapses = []
+        self.learning_effect = 0.1  # Adjusted learning effect
+        self.spike_threshold = 7.5  # Adjusted threshold for spiking
+        self.adaptive_threshold = self.spike_threshold  # Initial threshold
+        self.neurons = []  # Add this line to initialize the list of neurons
+        self.synapses = []
+        self.graph = nx.Graph()
+        self.neuromodulators = []
+        self.neuromodulators = {}  # Store neuromodulators
+        self.aggression_level = .7
+
+    def create_neuromodulator(self, name, neurons, modulation_strength=0.1):
+        self.neuromodulators[name] = {
+            "neurons": neurons,
+            "modulation_strength": modulation_strength
+        }
+
+    def apply_neuromodulation(self):
+        for neuromodulator in self.neuromodulators.values():
+            modulation_strength = neuromodulator["modulation_strength"]
+            for neuron in neuromodulator["neurons"]:
+                for synapse in neuron.synapses:
+                    synapse.weight *= modulation_strength
+
+    def create_network(self, membrane_resistance_matrix, threshold_matrix, synapse_matrix):
+        num_layers, size_x, size_y = membrane_resistance_matrix.shape
+        for z in range(num_layers):
+            for x in range(size_x):
+                for y in range(size_y):
+                    membrane_resistance = membrane_resistance_matrix[z, x, y]
+                    resting_potential = -70.0  # Adjust as needed
+                    membrane_capacity = 1.0  # Adjust as needed
+                    activation_threshold = threshold_matrix[z, x, y]
+                    neuron = self.add_neuron(f"Neuron-{x + 1}-{y + 1}-{z + 1}",
+                                             membrane_resistance, membrane_capacity, resting_potential,
+                                             activation_threshold)
+
+        for source_x in range(size_x):
+            for source_y in range(size_y):
+                for target_x in range(size_x):
+                    for target_y in range(size_y):
+                        feedback = synapse_matrix[source_x, source_y, target_x, target_y]
+                        source_neuron = self.get_neuron_by_coordinates(source_x, source_y)
+                        target_neuron = self.get_neuron_by_coordinates(target_x, target_y)
+                        self.connect_neurons(source_neuron, target_neuron, feedback=feedback)
+    def add_neuron(self, name, membrane_resistance, membrane_capacity, resting_potential, activation_threshold):
+        neuron = Neuron(name, membrane_resistance, membrane_capacity, resting_potential)
+        neuron.spike_threshold = activation_threshold
+        self.neurons.append(neuron)
+        return neuron
+    def get_neuron_by_coordinates(self, x, y):
+        # Find a neuron in the network by its (x, y) coordinates
+        neuron_name = f"Neuron-{x + 1}-{y + 1}-1"  # Assumes a single layer (z=1)
+        return next(neuron for neuron in self.neurons if neuron.name == neuron_name)
+
+    def connect_neurons(self, neuron1, neuron2, feedback=False):
+        synapse = Synapse(neuron1, neuron2, feedback=feedback)
+        self.synapses.append(synapse)
+        neuron1.add_synapse(synapse)
+
+        self.graph.add_edge(neuron1.name, neuron2.name, color='black', feedback=feedback)
+
+    def visualize_network(self, activated_neurons=None, learned_neurons=None):
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_title("3D Neural Network Structure")
+
+        for edge in self.graph.edges(data=True):
+            source, target, data = edge
+            x1, y1, z1 = map(int, source.split('-')[1:])
+            x2, y2, z2 = map(int, target.split('-')[1:])
+            color = data.get('color', 'black')
+            feedback = data.get('feedback', False)
+
+            if feedback:
+                ax.plot([x1, x2], [y1, y2], [z1, z2], color='red', linestyle='dashed', linewidth=2)
+            else:
+                ax.plot([x1, x2], [y1, y2], [z1, z2], color=color, linewidth=2)
+
+        # Color neurons based on activation status and learning
+        colors = []
+        for neuron in self.neurons:
+            if activated_neurons and neuron in activated_neurons:
+                colors.append('yellow')
+            elif learned_neurons and neuron in learned_neurons:
+                colors.append('purple')
+            else:
+                colors.append('grey')
+
+        ax.scatter([int(neuron.name.split('-')[1]) for neuron in self.neurons],
+                   [int(neuron.name.split('-')[2]) for neuron in self.neurons],
+                   [int(neuron.name.split('-')[3]) for neuron in self.neurons],
+                   c=colors, s=80, edgecolors='black')
+
+        # Add a legend
+        legend_elements = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', markersize=10,
+                                      label='Activated Neurons'),
+                           plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='purple', markersize=10,
+                                      label='Learned Neurons')]
+        ax.legend(handles=legend_elements, loc='upper right')
+
+        plt.show()
+
+    def grow_synapses(self):
+        # Add synapses dynamically, with aggression control at least that was the goal no promises, I was really tired while coding this;-;
+        for source in self.neurons:
+            for target in self.neurons:
+                if source != target and not any(synapse.target == target for synapse in source.synapses):
+                    if random.random() < self.aggression_level and target.is_activated:
+                        self.connect_neurons(source, target, feedback=False)
+    def adapt_thresholds(self):
+        for neuron in self.neurons:
+            if neuron.is_activated:
+                neuron.adapt_threshold(0.1)  # Adjust the adaptation rate as needed
+            else:
+                neuron.adapt_threshold(-0.1)  # Adjust the adaptation rate as needed
+    def adapt_threshold(self, delta_threshold):
+        # Update the adaptive threshold if it detects any activity
+        self.adaptive_threshold += delta_threshold
+
+        # Implemented homeostasis - regulate neuron firing rates
+        if len(self.synapses) > 0:
+            avg_synaptic_weight = sum(synapse.weight for synapse in self.synapses) / len(self.synapses)
+            if avg_synaptic_weight > 0.6:
+                self.adaptive_threshold += 0.1
+            elif avg_synaptic_weight < 0.4:
+                self.adaptive_threshold -= 0.1
+    def learn(self, external_reward):
+        # Apply reinforcement learning to synapses based on external reward
+        for synapse in self.synapses:
+            synapse.apply_plasticity_rule()
+            synapse.weight += external_reward * synapse.target.learning_effect
+    def remove_unused_synapses(self):
+        # Remove unused synapses (considering activation activity):
+        synapses_to_remove = []
+        for synapse in self.synapses:
+            target_neuron = synapse.target
+            # Check if the target neuron hasn't been activated in the last two steps
+            if all(not neuron.is_activated for neuron in [target_neuron] + target_neuron.synapses[-2:]):
+                synapses_to_remove.append(synapse)
+
+        # Remove the identified synapses
+        for synapse in synapses_to_remove:
+            self.synapses.remove(synapse)
+    def optimize_network(self):
+        self.remove_unused_synapses()
+        self.grow_synapses()
+        self.adapt_thresholds()
+
+# Implement learning from experiences through the neorons and stuff
+def learn_from_experience(neural_network, experience_outcome):
+    external_reward = experience_outcome  # This could be a reward or punishment
+    neural_network.learn(external_reward)
+
+
+# Add the Neuromodulator class and methods for neuromodulation aka building and destroying of structures
+def simulate_network(network, input_pattern, num_steps):
+    activated_neurons = []
+    for step in range(num_steps):
+        for neuron in network.neurons:
+            if neuron.stimulate(input_pattern[step]):
+                activated_neurons.append(neuron)
+
+        network.optimize_network()
+
+    return len(activated_neurons)
+
+
+# Function to test if it is working correctly.
+def test_simulation(network):
+    # Example task: Learning to recognize patterns
+    pattern_a = [0, 0, 1, 0, 1]
+    pattern_b = [1, 0, 0, 1, 0]
+    memory_pattern = [1, 1, 1, 1, 1]  # Memory pattern
+    stimulus_pattern = [0, 1, 0, 1, 0]  # Stimulus pattern
+
+    # Train the network to recognize patterns A and B and store the memory pattern
+    for _ in range(500):
+        simulate_network(network, pattern_a, num_steps=5)
+        simulate_network(network, pattern_b, num_steps=5)
+        simulate_network(network, memory_pattern, num_steps=5)
+
+    # Test the network's recognition of the memory pattern
+    correct_memory = 0
+    correct_stimulus = 0
+    num_tests = 1000
+
+    for _ in range(num_tests):
+        output_memory = simulate_network(network, memory_pattern, num_steps=5)
+        output_stimulus = simulate_network(network, stimulus_pattern, num_steps=5)
+
+        if output_memory > output_stimulus:
+            correct_memory += 1
+        else:
+            correct_stimulus += 1
+
+    # Print recognition results
+    if correct_memory > correct_stimulus:
+        print("Memory Pattern Recognized")
+    elif correct_stimulus > correct_memory:
+        print("Stimulus Pattern Recognized")
+    else:
+        print("Recognition Inconclusive")
+
+
+# Custom matrices and parameters
+membrane_resistance_matrix = np.array([[[1.0, 1.0], [1.0, 1.0]], [[1.0, 1.0], [1.0, 1.0]]])
+threshold_matrix = np.array([[[5.0, 5.0], [5.0, 5.0]], [[5.0, 5.0], [5.0, 5.0]]])
+synapse_matrix = np.array([[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]])
+
+# Custom networking example thingy
+network = NeuralNetwork("Custom Network", membrane_resistance=1.0, membrane_capacity=1.0, resting_potential=-70.0)
+
+# Create neuromodulators IF needed
+neuromodulator_a = Neuromodulator("NeuroA", network.neurons[:2])
+neuromodulator_b = Neuromodulator("NeuroB", network.neurons[2:])
+network.create_neuromodulator(neuromodulator_a.name, neuromodulator_a.target_neurons, modulation_strength=0.1)
+network.create_neuromodulator(neuromodulator_b.name, neuromodulator_b.target_neurons, modulation_strength=0.2)
+
+# Simulate the network and test its ability to learn and recognize patterns if it can......
+test_simulation(network)
